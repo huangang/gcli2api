@@ -434,32 +434,38 @@ def build_generation_config(payload: Dict[str, Any]) -> Dict[str, Any]:
             thinking_config = get_thinking_config(thinking_value)
             include_thoughts = bool(thinking_config.get("includeThoughts", False))
 
+            # 检查最后一条 assistant 消息的第一个 block 类型
             last_assistant_first_block_type = None
+            has_assistant_message = False
             for msg in reversed(payload.get("messages") or []):
                 if not isinstance(msg, dict):
                     continue
                 if msg.get("role") != "assistant":
                     continue
+                has_assistant_message = True
                 content = msg.get("content")
                 if not isinstance(content, list) or not content:
-                    continue
+                    # assistant 消息存在但 content 为空或非列表，视为没有 thinking block
+                    last_assistant_first_block_type = "empty"
+                    break
                 first_block = content[0]
                 if isinstance(first_block, dict):
                     last_assistant_first_block_type = first_block.get("type")
                 else:
-                    last_assistant_first_block_type = None
+                    # content[0] 不是 dict，视为文本
+                    last_assistant_first_block_type = "text"
                 break
 
-            if include_thoughts and last_assistant_first_block_type not in {
-                None,
+            # 如果存在 assistant 消息，但第一个 block 不是 thinking/redacted_thinking，则跳过 thinkingConfig
+            if include_thoughts and has_assistant_message and last_assistant_first_block_type not in {
                 "thinking",
                 "redacted_thinking",
             }:
-                if _anthropic_debug_enabled():
-                    log.info(
-                        "[ANTHROPIC][thinking] 请求显式启用 thinking，但历史 messages 未回放 "
-                        "满足约束的 assistant thinking/redacted_thinking 起始块，已跳过下发 thinkingConfig（避免下游 400）"
-                    )
+                log.warning(
+                    "[ANTHROPIC][thinking] 请求显式启用 thinking，但历史 messages 未回放 "
+                    f"满足约束的 assistant thinking/redacted_thinking 起始块（发现类型: {last_assistant_first_block_type}），"
+                    "已跳过下发 thinkingConfig（避免下游 400）"
+                )
                 return config
 
             max_tokens = payload.get("max_tokens")
@@ -519,6 +525,26 @@ def convert_anthropic_request_to_antigravity_components(payload: Dict[str, Any])
     tools = convert_tools(payload.get("tools"))
     generation_config = build_generation_config(payload)
 
+    # 重组后再次检查：如果 thinkingConfig 已启用，验证最后一条 model 消息是否以 thinking 开头
+    if "thinkingConfig" in generation_config and generation_config["thinkingConfig"].get("includeThoughts"):
+        last_model_msg = None
+        for msg in reversed(contents):
+            if msg.get("role") == "model":
+                last_model_msg = msg
+                break
+
+        if last_model_msg:
+            parts = last_model_msg.get("parts", [])
+            if parts and isinstance(parts[0], dict):
+                # 检查第一个 part 是否是 thinking（带 thought=True 标记）
+                first_part = parts[0]
+                if not first_part.get("thought"):
+                    log.warning(
+                        "[ANTHROPIC][thinking] 重组后最后一条 model 消息未以 thinking 开头，"
+                        "已移除 thinkingConfig（避免下游 400）"
+                    )
+                    generation_config.pop("thinkingConfig", None)
+
     return {
         "model": model,
         "contents": contents,
@@ -526,3 +552,5 @@ def convert_anthropic_request_to_antigravity_components(payload: Dict[str, Any])
         "tools": tools,
         "generation_config": generation_config,
     }
+
+
