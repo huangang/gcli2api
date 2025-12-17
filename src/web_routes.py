@@ -1724,9 +1724,12 @@ async def download_all_antigravity_creds(token: str = Depends(verify_token)):
 
 
 @router.get("/antigravity/usage")
-async def get_antigravity_usage(token: str = Depends(verify_token)):
+async def get_antigravity_usage(token: str = Depends(verify_token), credential: str = None):
     """
     获取 Antigravity 使用量信息
+
+    Query Parameters:
+        credential: 可选，指定凭证文件名。如果不指定，返回第一个可用凭证的使用量
     """
     try:
         from src.antigravity_api import fetch_user_status
@@ -1736,7 +1739,7 @@ async def get_antigravity_usage(token: str = Depends(verify_token)):
         cred_mgr = await get_credential_manager()
 
         # 获取用户状态
-        user_status = await fetch_user_status(cred_mgr)
+        user_status = await fetch_user_status(cred_mgr, credential)
 
         if not user_status:
             raise HTTPException(status_code=500, detail="Failed to fetch user status")
@@ -1747,6 +1750,30 @@ async def get_antigravity_usage(token: str = Depends(verify_token)):
         raise
     except Exception as e:
         log.error(f"获取Antigravity使用量失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/antigravity/usage/all")
+async def get_all_antigravity_usage(token: str = Depends(verify_token)):
+    """
+    获取所有 Antigravity 凭证的使用量信息
+    """
+    try:
+        from src.antigravity_api import fetch_all_users_status
+        from src.credential_manager import get_credential_manager
+
+        # 获取凭证管理器
+        cred_mgr = await get_credential_manager()
+
+        # 获取所有用户状态
+        all_status = await fetch_all_users_status(cred_mgr)
+
+        return JSONResponse(content={"credentials": all_status, "total": len(all_status)})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"获取所有Antigravity使用量失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

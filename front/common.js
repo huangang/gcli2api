@@ -2007,6 +2007,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ==================== Antigravity 使用量相关函数 ====================
 
+// 全局变量：是否显示所有账号
+let showAllAccounts = false;
+
+/**
+ * 切换显示所有账号
+ */
+function toggleShowAllAccounts() {
+    const checkbox = document.getElementById('showAllAccountsCheckbox');
+    showAllAccounts = checkbox ? checkbox.checked : false;
+    refreshAntigravityUsage();
+}
+
 /**
  * 刷新 Antigravity 使用量信息
  */
@@ -2019,7 +2031,10 @@ async function refreshAntigravityUsage() {
     usageContent.textContent = '正在加载使用量信息...';
 
     try {
-        const response = await fetch('/antigravity/usage', {
+        // 根据是否显示所有账号选择不同的 API
+        const apiUrl = showAllAccounts ? '/antigravity/usage/all' : '/antigravity/usage';
+
+        const response = await fetch(apiUrl, {
             headers: {
                 'Authorization': `Bearer ${AppState.authToken}`
             }
@@ -2030,7 +2045,12 @@ async function refreshAntigravityUsage() {
         }
 
         const data = await response.json();
-        displayAntigravityUsage(data);
+
+        if (showAllAccounts) {
+            displayAllAntigravityUsage(data);
+        } else {
+            displayAntigravityUsage(data);
+        }
     } catch (error) {
         console.error('获取 Antigravity 使用量失败:', error);
         usageContent.className = 'error';
@@ -2108,6 +2128,97 @@ function displayAntigravityUsage(data) {
         html += '</div>';
     } else {
         html += '<p style="color: #666; text-align: center; margin-top: 20px;">暂无模型配额信息</p>';
+    }
+
+    usageContent.innerHTML = html;
+}
+
+/**
+ * 展示所有 Antigravity 账号的使用量信息
+ */
+function displayAllAntigravityUsage(data) {
+    const usageContent = document.getElementById('antigravityUsageContent');
+    if (!usageContent) return;
+
+    usageContent.className = '';
+
+    const credentials = data.credentials || [];
+    const total = data.total || 0;
+
+    // 构建 HTML
+    let html = '<div class="user-info-section">';
+    html += '<div style="font-weight: bold; margin-bottom: 10px;">所有 Antigravity 账号使用量</div>';
+    html += '<div class="user-info-grid">';
+    html += `<div class="user-info-item"><span class="user-info-label">账号总数:</span>${total}</div>`;
+    html += '</div>';
+    html += '</div>';
+
+    if (credentials.length > 0) {
+        // 遍历每个账号
+        credentials.forEach((credential, index) => {
+            const credentialName = credential.credentialName || `账号 ${index + 1}`;
+            const models = credential.models || {};
+            const hasError = credential.error;
+
+            html += `<div class="usage-container" style="margin-top: 15px; border-left: 3px solid ${hasError ? '#dc3545' : '#4285f4'};">`;
+            html += `<div style="font-weight: bold; margin-bottom: 10px; padding: 5px 10px; background-color: #f8f9fa;">`;
+            html += `${credentialName}`;
+            if (hasError) {
+                html += ` <span style="color: #dc3545; font-size: 12px;">(错误: ${credential.error})</span>`;
+            }
+            html += `</div>`;
+
+            if (!hasError && Object.keys(models).length > 0) {
+                html += '<div class="usage-grid">';
+
+                Object.entries(models).forEach(([modelName, modelInfo]) => {
+                    const remainingFraction = modelInfo.remaining || 0;
+                    const remainingPercentage = (remainingFraction * 100).toFixed(1);
+
+                    // 确定颜色等级
+                    let barClass = 'high';
+                    if (remainingPercentage < 10) {
+                        barClass = 'low';
+                    } else if (remainingPercentage < 30) {
+                        barClass = 'medium';
+                    }
+
+                    // 格式化重置时间
+                    let resetTimeText = 'N/A';
+                    if (modelInfo.resetTime || modelInfo.resetTimeRaw) {
+                        const resetDate = new Date(modelInfo.resetTime || modelInfo.resetTimeRaw);
+                        const now = new Date();
+                        const delta = resetDate - now;
+
+                        if (delta > 0) {
+                            const hours = Math.floor(delta / (1000 * 60 * 60));
+                            const minutes = Math.floor((delta % (1000 * 60 * 60)) / (1000 * 60));
+                            resetTimeText = `${hours}小时${minutes}分钟后重置`;
+                        } else {
+                            resetTimeText = '已重置';
+                        }
+                    }
+
+                    html += '<div class="usage-card">';
+                    html += `<div class="usage-card-header">${modelInfo.displayName || modelName}</div>`;
+                    html += `<div class="usage-percentage">${remainingPercentage}%</div>`;
+                    html += '<div class="usage-bar-container">';
+                    html += `<div class="usage-bar ${barClass}" style="width: ${remainingPercentage}%"></div>`;
+                    html += '</div>';
+                    html += `<div class="usage-text">剩余配额: ${remainingPercentage}%</div>`;
+                    html += `<div class="usage-reset-time">${resetTimeText}</div>`;
+                    html += '</div>';
+                });
+
+                html += '</div>';
+            } else if (!hasError) {
+                html += '<p style="color: #666; text-align: center; padding: 10px;">暂无模型配额信息</p>';
+            }
+
+            html += '</div>';
+        });
+    } else {
+        html += '<p style="color: #666; text-align: center; margin-top: 20px;">暂无账号信息</p>';
     }
 
     usageContent.innerHTML = html;

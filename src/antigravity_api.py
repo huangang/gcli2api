@@ -433,21 +433,37 @@ async def fetch_available_models(
 
 async def fetch_user_status(
     credential_manager: CredentialManager,
+    credential_name: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     获取用户状态和使用量信息
     通过 fetchAvailableModels 接口获取模型配额信息
 
+    Args:
+        credential_manager: 凭证管理器
+        credential_name: 可选的凭证文件名，如果不指定则使用第一个可用凭证
+
     Returns:
         用户状态数据，包含配额信息等
     """
     # 获取可用凭证
-    cred_result = await credential_manager.get_valid_credential(is_antigravity=True)
-    if not cred_result:
-        log.error("[ANTIGRAVITY] No valid credentials available for fetching user status")
-        return None
+    if credential_name:
+        # 获取指定凭证
+        credential_data = await credential_manager._storage_adapter.get_credential(
+            credential_name, is_antigravity=True
+        )
+        if not credential_data:
+            log.error(f"[ANTIGRAVITY] Credential not found: {credential_name}")
+            return None
+        current_file = credential_name
+    else:
+        # 获取第一个可用凭证
+        cred_result = await credential_manager.get_valid_credential(is_antigravity=True)
+        if not cred_result:
+            log.error("[ANTIGRAVITY] No valid credentials available for fetching user status")
+            return None
+        current_file, credential_data = cred_result
 
-    current_file, credential_data = cred_result
     access_token = credential_data.get("access_token") or credential_data.get("token")
 
     if not access_token:
@@ -469,10 +485,11 @@ async def fetch_user_status(
 
         if response.status_code == 200:
             data = response.json()
-            log.info(f"[ANTIGRAVITY] Successfully fetched user status with models")
+            log.info(f"[ANTIGRAVITY] Successfully fetched user status with models for {current_file}")
 
             # 解析模型配额信息
             result = {
+                "credentialName": current_file,
                 "lastUpdated": int(datetime.now(timezone.utc).timestamp()),
                 "models": {}
             }
@@ -506,3 +523,54 @@ async def fetch_user_status(
     except Exception as e:
         log.error(f"[ANTIGRAVITY] Failed to fetch user status: {e}")
         return None
+
+
+async def fetch_all_users_status(
+    credential_manager: CredentialManager,
+) -> List[Dict[str, Any]]:
+    """
+    获取所有 Antigravity 凭证的使用量信息
+
+    Args:
+        credential_manager: 凭证管理器
+
+    Returns:
+        所有凭证的使用量信息列表
+    """
+    results = []
+
+    try:
+        # 获取所有 Antigravity 凭证列表
+        credential_names = await credential_manager._storage_adapter.list_credentials(is_antigravity=True)
+
+        log.info(f"[ANTIGRAVITY] Fetching usage for {len(credential_names)} credentials")
+
+        # 遍历所有凭证，获取使用量
+        for credential_name in credential_names:
+            try:
+                usage_data = await fetch_user_status(credential_manager, credential_name)
+                if usage_data:
+                    results.append(usage_data)
+                else:
+                    # 即使获取失败，也添加一个错误记录
+                    results.append({
+                        "credentialName": credential_name,
+                        "error": "Failed to fetch usage data",
+                        "lastUpdated": int(datetime.now(timezone.utc).timestamp()),
+                        "models": {}
+                    })
+            except Exception as e:
+                log.error(f"[ANTIGRAVITY] Failed to fetch usage for {credential_name}: {e}")
+                results.append({
+                    "credentialName": credential_name,
+                    "error": str(e),
+                    "lastUpdated": int(datetime.now(timezone.utc).timestamp()),
+                    "models": {}
+                })
+
+        log.info(f"[ANTIGRAVITY] Successfully fetched usage for {len(results)} credentials")
+        return results
+
+    except Exception as e:
+        log.error(f"[ANTIGRAVITY] Failed to fetch all users status: {e}")
+        return []

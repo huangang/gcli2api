@@ -1451,7 +1451,13 @@
                 <div class="usage-container" id="antigravityUsageContainer" style="margin-top: 20px; margin-bottom: 20px;">
                     <h4 style="margin-top: 0; margin-bottom: 15px;">
                         使用量信息
-                        <button class="refresh-btn" onclick="refreshAntigravityUsage()" style="float: right; padding: 5px 15px; font-size: 14px;">刷新使用量</button>
+                        <div style="float: right;">
+                            <label style="font-size: 14px; font-weight: normal; margin-right: 10px;">
+                                <input type="checkbox" id="showAllAccountsCheckbox" onchange="toggleShowAllAccounts()" style="margin-right: 5px;">
+                                显示所有账号
+                            </label>
+                            <button class="refresh-btn" onclick="refreshAntigravityUsage()" style="padding: 5px 15px; font-size: 14px;">刷新使用量</button>
+                        </div>
                     </h4>
                     <div id="antigravityUsageContent" class="loading">正在加载使用量信息...</div>
                 </div>
