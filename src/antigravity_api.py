@@ -429,3 +429,80 @@ async def fetch_available_models(
     except Exception as e:
         log.error(f"[ANTIGRAVITY] Failed to fetch models: {e}")
         return []
+
+
+async def fetch_user_status(
+    credential_manager: CredentialManager,
+) -> Optional[Dict[str, Any]]:
+    """
+    获取用户状态和使用量信息
+    通过 fetchAvailableModels 接口获取模型配额信息
+
+    Returns:
+        用户状态数据，包含配额信息等
+    """
+    # 获取可用凭证
+    cred_result = await credential_manager.get_valid_credential(is_antigravity=True)
+    if not cred_result:
+        log.error("[ANTIGRAVITY] No valid credentials available for fetching user status")
+        return None
+
+    current_file, credential_data = cred_result
+    access_token = credential_data.get("access_token") or credential_data.get("token")
+
+    if not access_token:
+        log.error(f"[ANTIGRAVITY] No access token in credential: {current_file}")
+        return None
+
+    # 构建请求头
+    headers = build_antigravity_headers(access_token)
+
+    try:
+        # 调用 fetchAvailableModels 接口获取模型和配额信息
+        antigravity_url = await get_antigravity_api_url()
+        response = await post_async(
+            f"{antigravity_url}/v1internal:fetchAvailableModels",
+            json={},  # 空的请求体
+            headers=headers,
+            timeout=30.0,
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            log.info(f"[ANTIGRAVITY] Successfully fetched user status with models")
+
+            # 解析模型配额信息
+            result = {
+                "lastUpdated": int(datetime.now(timezone.utc).timestamp()),
+                "models": {}
+            }
+
+            if 'models' in data and isinstance(data['models'], dict):
+                # 遍历模型数据，提取配额信息
+                for model_id, model_data in data['models'].items():
+                    model_info = {
+                        "displayName": model_id,
+                        "remaining": 0,
+                        "resetTime": None,
+                        "resetTimeRaw": None,
+                        "inputTokenLimit": 0,
+                        "outputTokenLimit": 0
+                    }
+
+                    # 从 quotaInfo 中提取配额信息
+                    if model_data and isinstance(model_data, dict) and 'quotaInfo' in model_data:
+                        quota_info = model_data['quotaInfo']
+                        model_info["remaining"] = quota_info.get('remainingFraction', quota_info.get('remaining', 0))
+                        model_info["resetTime"] = quota_info.get('resetTime')
+                        model_info["resetTimeRaw"] = quota_info.get('resetTime')
+
+                    result["models"][model_id] = model_info
+
+            return result
+        else:
+            log.error(f"[ANTIGRAVITY] Failed to fetch user status ({response.status_code}): {response.text[:500]}")
+            return None
+
+    except Exception as e:
+        log.error(f"[ANTIGRAVITY] Failed to fetch user status: {e}")
+        return None

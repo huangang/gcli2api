@@ -1723,3 +1723,30 @@ async def download_all_antigravity_creds(token: str = Depends(verify_token)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/antigravity/usage")
+async def get_antigravity_usage(token: str = Depends(verify_token)):
+    """
+    获取 Antigravity 使用量信息
+    """
+    try:
+        from src.antigravity_api import fetch_user_status
+        from src.credential_manager import get_credential_manager
+
+        # 获取凭证管理器
+        cred_mgr = await get_credential_manager()
+
+        # 获取用户状态
+        user_status = await fetch_user_status(cred_mgr)
+
+        if not user_status:
+            raise HTTPException(status_code=500, detail="Failed to fetch user status")
+
+        return JSONResponse(content=user_status)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"获取Antigravity使用量失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+

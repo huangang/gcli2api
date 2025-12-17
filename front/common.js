@@ -2004,3 +2004,137 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// ==================== Antigravity 使用量相关函数 ====================
+
+/**
+ * 刷新 Antigravity 使用量信息
+ */
+async function refreshAntigravityUsage() {
+    const usageContent = document.getElementById('antigravityUsageContent');
+    if (!usageContent) return;
+
+    // 显示加载状态
+    usageContent.className = 'loading';
+    usageContent.textContent = '正在加载使用量信息...';
+
+    try {
+        const response = await fetch('/antigravity/usage', {
+            headers: {
+                'Authorization': `Bearer ${AppState.authToken}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        displayAntigravityUsage(data);
+    } catch (error) {
+        console.error('获取 Antigravity 使用量失败:', error);
+        usageContent.className = 'error';
+        usageContent.innerHTML = `<p style="color: #dc3545;">获取使用量失败: ${error.message}</p>`;
+    }
+}
+
+/**
+ * 展示 Antigravity 使用量信息
+ */
+function displayAntigravityUsage(data) {
+    const usageContent = document.getElementById('antigravityUsageContent');
+    if (!usageContent) return;
+
+    usageContent.className = '';
+
+    // 解析数据（参考 AIClient-2-API 的格式）
+    const models = data.models || {};
+    const lastUpdated = data.lastUpdated ? new Date(data.lastUpdated * 1000).toLocaleString('zh-CN') : 'N/A';
+
+    // 构建 HTML
+    let html = '<div class="user-info-section">';
+    html += '<div style="font-weight: bold; margin-bottom: 10px;">Antigravity 使用量信息</div>';
+    html += '<div class="user-info-grid">';
+    html += `<div class="user-info-item"><span class="user-info-label">最后更新:</span>${lastUpdated}</div>`;
+    html += `<div class="user-info-item"><span class="user-info-label">模型数量:</span>${Object.keys(models).length}</div>`;
+    html += '</div>';
+    html += '</div>';
+
+    // 构建模型配额信息
+    const modelEntries = Object.entries(models);
+
+    if (modelEntries.length > 0) {
+        html += '<div class="usage-grid">';
+
+        modelEntries.forEach(([modelName, modelInfo]) => {
+            const remainingFraction = modelInfo.remaining || 0;
+            const remainingPercentage = (remainingFraction * 100).toFixed(1);
+
+            // 确定颜色等级
+            let barClass = 'high';
+            if (remainingPercentage < 10) {
+                barClass = 'low';
+            } else if (remainingPercentage < 30) {
+                barClass = 'medium';
+            }
+
+            // 格式化重置时间
+            let resetTimeText = 'N/A';
+            if (modelInfo.resetTime || modelInfo.resetTimeRaw) {
+                const resetDate = new Date(modelInfo.resetTime || modelInfo.resetTimeRaw);
+                const now = new Date();
+                const delta = resetDate - now;
+
+                if (delta > 0) {
+                    const hours = Math.floor(delta / (1000 * 60 * 60));
+                    const minutes = Math.floor((delta % (1000 * 60 * 60)) / (1000 * 60));
+                    resetTimeText = `${hours}小时${minutes}分钟后重置`;
+                } else {
+                    resetTimeText = '已重置';
+                }
+            }
+
+            html += '<div class="usage-card">';
+            html += `<div class="usage-card-header">${modelInfo.displayName || modelName}</div>`;
+            html += `<div class="usage-percentage">${remainingPercentage}%</div>`;
+            html += '<div class="usage-bar-container">';
+            html += `<div class="usage-bar ${barClass}" style="width: ${remainingPercentage}%"></div>`;
+            html += '</div>';
+            html += `<div class="usage-text">剩余配额: ${remainingPercentage}%</div>`;
+            html += `<div class="usage-reset-time">${resetTimeText}</div>`;
+            html += '</div>';
+        });
+
+        html += '</div>';
+    } else {
+        html += '<p style="color: #666; text-align: center; margin-top: 20px;">暂无模型配额信息</p>';
+    }
+
+    usageContent.innerHTML = html;
+}
+
+/**
+ * 初始化 Antigravity 使用量（在切换到 Antigravity 管理标签时调用）
+ */
+function initAntigravityUsage() {
+    const usageContent = document.getElementById('antigravityUsageContent');
+    if (usageContent && usageContent.className === 'loading') {
+        refreshAntigravityUsage();
+    }
+}
+
+// 在切换标签时自动加载使用量
+const originalSwitchTab = window.switchTab;
+window.switchTab = function(tabName) {
+    if (originalSwitchTab) {
+        originalSwitchTab(tabName);
+    }
+
+    // 如果切换到 Antigravity 管理标签，自动加载使用量
+    if (tabName === 'antigravity-manage') {
+        setTimeout(() => {
+            initAntigravityUsage();
+        }, 100);
+    }
+};
+

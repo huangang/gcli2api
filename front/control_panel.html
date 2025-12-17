@@ -930,7 +930,110 @@
             gap: 10px;
             justify-content: flex-end;
         }
+
+        /* Antigravity 使用量样式 */
+        .usage-container {
+            background-color: #f8f9fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .usage-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .usage-card {
+            background-color: white;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 15px;
+        }
+
+        .usage-card-header {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .usage-bar-container {
+            width: 100%;
+            height: 24px;
+            background-color: #e9ecef;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 8px 0;
+            position: relative;
+        }
+
+        .usage-bar {
+            height: 100%;
+            transition: width 0.3s ease;
+            border-radius: 12px;
+        }
+
+        .usage-bar.high {
+            background: linear-gradient(90deg, #28a745, #20c997);
+        }
+
+        .usage-bar.medium {
+            background: linear-gradient(90deg, #ffc107, #fd7e14);
+        }
+
+        .usage-bar.low {
+            background: linear-gradient(90deg, #dc3545, #c82333);
+        }
+
+        .usage-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .usage-percentage {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin: 5px 0;
+        }
+
+        .usage-reset-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .user-info-section {
+            background-color: white;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .user-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .user-info-item {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .user-info-label {
+            font-weight: bold;
+            color: #333;
+            margin-right: 5px;
+        }
     </style>
+
 </head>
 
 <body>
@@ -1342,6 +1445,15 @@
                         <span class="stat-number" id="antigravityStatDisabled">0</span>
                         <span class="stat-label">禁用</span>
                     </div>
+                </div>
+
+                <!-- Antigravity 使用量信息 -->
+                <div class="usage-container" id="antigravityUsageContainer" style="margin-top: 20px; margin-bottom: 20px;">
+                    <h4 style="margin-top: 0; margin-bottom: 15px;">
+                        使用量信息
+                        <button class="refresh-btn" onclick="refreshAntigravityUsage()" style="float: right; padding: 5px 15px; font-size: 14px;">刷新使用量</button>
+                    </h4>
+                    <div id="antigravityUsageContent" class="loading">正在加载使用量信息...</div>
                 </div>
 
                 <div class="manage-actions">
