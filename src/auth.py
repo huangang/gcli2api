@@ -456,6 +456,7 @@ async def complete_auth_flow(
                     if user_projects:
                         # 如果只有一个项目，自动使用
                         if len(user_projects) == 1:
+                            # Google API returns projectId in camelCase
                             project_id = user_projects[0].get("projectId")
                             if project_id:
                                 flow_data["project_id"] = project_id
@@ -474,7 +475,8 @@ async def complete_auth_flow(
                                     "requires_project_selection": True,
                                     "available_projects": [
                                         {
-                                            "projectId": p.get("projectId"),
+                                            # Google API returns projectId in camelCase
+                                            "project_id": p.get("projectId"),
                                             "name": p.get("displayName") or p.get("projectId"),
                                             "projectNumber": p.get("projectNumber"),
                                         }
@@ -694,6 +696,7 @@ async def asyncio_complete_auth_flow(
                     if user_projects:
                         # 如果只有一个项目，自动使用
                         if len(user_projects) == 1:
+                            # Google API returns projectId in camelCase
                             project_id = user_projects[0].get("projectId")
                             if project_id:
                                 flow_data["project_id"] = project_id
@@ -718,7 +721,8 @@ async def asyncio_complete_auth_flow(
                                     "requires_project_selection": True,
                                     "available_projects": [
                                         {
-                                            "projectId": p.get("projectId"),
+                                            # Google API returns projectId in camelCase
+                                            "project_id": p.get("projectId"),
                                             "name": p.get("displayName") or p.get("projectId"),
                                             "projectNumber": p.get("projectNumber"),
                                         }
@@ -852,11 +856,13 @@ async def complete_auth_flow_from_callback_url(
                     if projects:
                         if len(projects) == 1:
                             # 只有一个项目，自动使用
+                            # Google API returns projectId in camelCase
                             detected_project_id = projects[0]["projectId"]
                             auto_detected = True
                             log.info(f"自动检测到唯一项目ID: {detected_project_id}")
                         else:
                             # 多个项目，自动选择第一个
+                            # Google API returns projectId in camelCase
                             detected_project_id = projects[0]["projectId"]
                             auto_detected = True
                             log.info(
