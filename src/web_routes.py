@@ -1678,7 +1678,7 @@ async def download_all_antigravity_creds(token: str = Depends(verify_panel_token
 
 
 @router.get("/antigravity/usage")
-async def get_antigravity_usage(token: str = Depends(verify_token), credential: str = None):
+async def get_antigravity_usage(token: str = Depends(verify_panel_token), credential: str = None):
     """
     获取 Antigravity 使用量信息
 
@@ -1708,7 +1708,7 @@ async def get_antigravity_usage(token: str = Depends(verify_token), credential: 
 
 
 @router.get("/antigravity/usage/all")
-async def get_all_antigravity_usage(token: str = Depends(verify_token)):
+async def get_all_antigravity_usage(token: str = Depends(verify_panel_token)):
     """
     获取所有 Antigravity 凭证的使用量信息
     """

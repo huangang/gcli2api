@@ -603,6 +603,110 @@
                 transform: scale(1.1) !important;
             }
         }
+
+        /* 使用量信息样式 - 移动端优化 */
+        .user-info-section {
+            margin: 10px 0;
+        }
+
+        .user-info-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        .user-info-item {
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .user-info-label {
+            font-weight: bold;
+            color: #666;
+            margin-right: 5px;
+        }
+
+        .usage-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .usage-card {
+            background: #ffffff;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .usage-card-header {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #333;
+            word-break: break-all;
+        }
+
+        .usage-bar-container {
+            margin: 8px 0;
+        }
+
+        .usage-bar {
+            height: 20px;
+            background: #28a745;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .usage-bar.high {
+            background: #28a745;
+        }
+
+        .usage-bar.medium {
+            background: #ffc107;
+        }
+
+        .usage-bar.low {
+            background: #dc3545;
+        }
+
+        .usage-text {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .usage-percentage {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .usage-reset-time {
+            font-size: 10px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        @media (min-width: 600px) {
+            .user-info-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .usage-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
     </style>
 </head>
 
@@ -1036,6 +1140,21 @@
                 <h3>Antigravity凭证文件管理</h3>
                 <p>管理所有Antigravity认证文件，查看状态和执行操作</p>
 
+
+                <!-- Antigravity 使用量信息 -->
+                <div class="card" id="antigravityUsageContainer" style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                        <h4 style="margin: 0; font-size: 16px;">使用量信息</h4>
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <label style="font-size: 12px; display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+                                <input type="checkbox" id="showAllAccountsCheckbox" onchange="toggleShowAllAccounts()" style="margin: 0;">
+                                显示所有账号
+                            </label>
+                            <button class="btn btn-small" onclick="refreshAntigravityUsage()" style="background-color: #17a2b8; padding: 4px 10px; font-size: 12px;">刷新</button>
+                        </div>
+                    </div>
+                    <div id="antigravityUsageContent" class="loading" style="text-align: center; padding: 15px; color: #666; font-size: 13px;">正在加载使用量信息...</div>
+                </div>
                 <!-- 状态统计 -->
                 <div class="stats-container" id="antigravityStatsContainer">
                     <div class="stat-item" style="border-left: 4px solid #007bff;">

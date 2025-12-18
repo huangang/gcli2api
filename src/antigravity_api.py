@@ -523,49 +523,51 @@ async def fetch_user_status(
     try:
         # 调用 fetchAvailableModels 接口获取模型和配额信息
         antigravity_url = await get_antigravity_api_url()
-        response = await post_async(
-            f"{antigravity_url}/v1internal:fetchAvailableModels",
-            json={},  # 空的请求体
-            headers=headers,
-            timeout=30.0,
-        )
 
-        if response.status_code == 200:
-            data = response.json()
-            log.info(f"[ANTIGRAVITY] Successfully fetched user status with models for {current_file}")
+        # 使用上下文管理器确保正确的资源管理
+        async with http_client.get_client(timeout=30.0) as client:
+            response = await client.post(
+                f"{antigravity_url}/v1internal:fetchAvailableModels",
+                json={},  # 空的请求体
+                headers=headers,
+            )
 
-            # 解析模型配额信息
-            result = {
-                "credentialName": current_file,
-                "lastUpdated": int(datetime.now(timezone.utc).timestamp()),
-                "models": {}
-            }
+            if response.status_code == 200:
+                data = response.json()
+                log.info(f"[ANTIGRAVITY] Successfully fetched user status with models for {current_file}")
 
-            if 'models' in data and isinstance(data['models'], dict):
-                # 遍历模型数据，提取配额信息
-                for model_id, model_data in data['models'].items():
-                    model_info = {
-                        "displayName": model_id,
-                        "remaining": 0,
-                        "resetTime": None,
-                        "resetTimeRaw": None,
-                        "inputTokenLimit": 0,
-                        "outputTokenLimit": 0
-                    }
+                # 解析模型配额信息
+                result = {
+                    "credentialName": current_file,
+                    "lastUpdated": int(datetime.now(timezone.utc).timestamp()),
+                    "models": {}
+                }
 
-                    # 从 quotaInfo 中提取配额信息
-                    if model_data and isinstance(model_data, dict) and 'quotaInfo' in model_data:
-                        quota_info = model_data['quotaInfo']
-                        model_info["remaining"] = quota_info.get('remainingFraction', quota_info.get('remaining', 0))
-                        model_info["resetTime"] = quota_info.get('resetTime')
-                        model_info["resetTimeRaw"] = quota_info.get('resetTime')
+                if 'models' in data and isinstance(data['models'], dict):
+                    # 遍历模型数据，提取配额信息
+                    for model_id, model_data in data['models'].items():
+                        model_info = {
+                            "displayName": model_id,
+                            "remaining": 0,
+                            "resetTime": None,
+                            "resetTimeRaw": None,
+                            "inputTokenLimit": 0,
+                            "outputTokenLimit": 0
+                        }
 
-                    result["models"][model_id] = model_info
+                        # 从 quotaInfo 中提取配额信息
+                        if model_data and isinstance(model_data, dict) and 'quotaInfo' in model_data:
+                            quota_info = model_data['quotaInfo']
+                            model_info["remaining"] = quota_info.get('remainingFraction', quota_info.get('remaining', 0))
+                            model_info["resetTime"] = quota_info.get('resetTime')
+                            model_info["resetTimeRaw"] = quota_info.get('resetTime')
 
-            return result
-        else:
-            log.error(f"[ANTIGRAVITY] Failed to fetch user status ({response.status_code}): {response.text[:500]}")
-            return None
+                        result["models"][model_id] = model_info
+
+                return result
+            else:
+                log.error(f"[ANTIGRAVITY] Failed to fetch user status ({response.status_code}): {response.text[:500]}")
+                return None
 
     except Exception as e:
         log.error(f"[ANTIGRAVITY] Failed to fetch user status: {e}")
