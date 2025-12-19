@@ -676,6 +676,10 @@ def convert_anthropic_request_to_antigravity_components(payload: Dict[str, Any])
             filtered_parts = [part for part in parts if not (isinstance(part, dict) and part.get("thought"))]
             content["parts"] = filtered_parts
 
+        # 移除空消息（parts 为空的消息会导致下游 400 错误）
+        contents = [content for content in contents if content.get("parts")]
+        log.info(f"[ANTHROPIC][thinking] 移除空消息后，剩余 {len(contents)} 条消息")
+
     return {
         "model": model,
         "contents": contents,
