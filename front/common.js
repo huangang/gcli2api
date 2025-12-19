@@ -56,6 +56,8 @@ function createCredsManager(type) {
         selectedFiles: new Set(),
         totalCount: 0,
         currentStatusFilter: 'all',
+        currentErrorCodeFilter: 'all',
+        currentCooldownFilter: 'all',
         statsData: { total: 0, normal: 0, disabled: 0 },
 
         // API端点
@@ -93,8 +95,10 @@ function createCredsManager(type) {
                 list.innerHTML = '';
 
                 const offset = (this.currentPage - 1) * this.pageSize;
+                const errorCodeFilter = this.currentErrorCodeFilter || 'all';
+                const cooldownFilter = this.currentCooldownFilter || 'all';
                 const response = await fetch(
-                    `${this.getEndpoint('status')}?offset=${offset}&limit=${this.pageSize}&status_filter=${this.currentStatusFilter}`,
+                    `${this.getEndpoint('status')}?offset=${offset}&limit=${this.pageSize}&status_filter=${this.currentStatusFilter}&error_code_filter=${errorCodeFilter}&cooldown_filter=${cooldownFilter}`,
                     { headers: getAuthHeaders() }
                 );
 
@@ -216,6 +220,10 @@ function createCredsManager(type) {
         // 应用状态筛选
         applyStatusFilter() {
             this.currentStatusFilter = document.getElementById(this.getElementId('StatusFilter')).value;
+            const errorCodeFilterEl = document.getElementById(this.getElementId('ErrorCodeFilter'));
+            const cooldownFilterEl = document.getElementById(this.getElementId('CooldownFilter'));
+            this.currentErrorCodeFilter = errorCodeFilterEl ? errorCodeFilterEl.value : 'all';
+            this.currentCooldownFilter = cooldownFilterEl ? cooldownFilterEl.value : 'all';
             this.currentPage = 1;
             this.refresh();
         },
@@ -225,7 +233,7 @@ function createCredsManager(type) {
             const selectedCount = this.selectedFiles.size;
             document.getElementById(this.getElementId('SelectedCount')).textContent = `已选择 ${selectedCount} 项`;
 
-            const batchBtns = ['Enable', 'Disable', 'Delete'].map(action =>
+            const batchBtns = ['Enable', 'Disable', 'Delete', 'Verify'].map(action =>
                 document.getElementById(this.getElementId(`Batch${action}Btn`))
             );
             batchBtns.forEach(btn => btn && (btn.disabled = selectedCount === 0));
@@ -575,6 +583,7 @@ function createCredCard(credInfo, manager) {
         <button class="cred-btn view" onclick="toggle${isAntigravity ? 'Antigravity' : ''}CredDetails('${pathId}')">查看内容</button>
         <button class="cred-btn download" onclick="download${isAntigravity ? 'Antigravity' : ''}Cred('${filename}')">下载</button>
         <button class="cred-btn email" onclick="fetch${isAntigravity ? 'Antigravity' : ''}UserEmail('${filename}')">查看账号邮箱</button>
+        <button class="cred-btn" style="background-color: #ff9800;" onclick="verify${isAntigravity ? 'Antigravity' : ''}ProjectId('${filename}')" title="重新获取Project ID，可恢复403错误">检验</button>
         <button class="cred-btn delete" data-filename="${filename}" data-action="delete">删除</button>
     `;
 
@@ -1301,6 +1310,207 @@ async function fetchAntigravityUserEmail(filename) {
         showStatus(`获取邮箱失败: ${error.message}`, 'error');
     }
 }
+
+async function verifyProjectId(filename) {
+    try {
+        // 显示加载状态
+        showStatus('🔍 正在检验Project ID，请稍候...', 'info');
+
+        const response = await fetch(`./creds/verify-project/${encodeURIComponent(filename)}`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            // 成功时显示绿色成功消息和Project ID
+            const successMsg = `✅ 检验成功！\n文件: ${filename}\nProject ID: ${data.project_id}\n\n${data.message}`;
+            showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
+
+            // 弹出成功提示
+            alert(`✅ 检验成功！\n\n文件: ${filename}\nProject ID: ${data.project_id}\n\n${data.message}`);
+
+            await AppState.creds.refresh();
+        } else {
+            // 失败时显示红色错误消息
+            const errorMsg = data.message || '检验失败';
+            showStatus(`❌ ${errorMsg}`, 'error');
+            alert(`❌ 检验失败\n\n${errorMsg}`);
+        }
+    } catch (error) {
+        const errorMsg = `检验失败: ${error.message}`;
+        showStatus(`❌ ${errorMsg}`, 'error');
+        alert(`❌ ${errorMsg}`);
+    }
+}
+
+async function verifyAntigravityProjectId(filename) {
+    try {
+        // 显示加载状态
+        showStatus('🔍 正在检验Antigravity Project ID，请稍候...', 'info');
+
+        const response = await fetch(`./antigravity/creds/verify-project/${encodeURIComponent(filename)}`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            // 成功时显示绿色成功消息和Project ID
+            const successMsg = `✅ 检验成功！\n文件: ${filename}\nProject ID: ${data.project_id}\n\n${data.message}`;
+            showStatus(successMsg.replace(/\n/g, '<br>'), 'success');
+
+            // 弹出成功提示
+            alert(`✅ Antigravity检验成功！\n\n文件: ${filename}\nProject ID: ${data.project_id}\n\n${data.message}`);
+
+            await AppState.antigravityCreds.refresh();
+        } else {
+            // 失败时显示红色错误消息
+            const errorMsg = data.message || '检验失败';
+            showStatus(`❌ ${errorMsg}`, 'error');
+            alert(`❌ 检验失败\n\n${errorMsg}`);
+        }
+    } catch (error) {
+        const errorMsg = `检验失败: ${error.message}`;
+        showStatus(`❌ ${errorMsg}`, 'error');
+        alert(`❌ ${errorMsg}`);
+    }
+}
+
+async function batchVerifyProjectIds() {
+    const selectedFiles = Array.from(AppState.creds.selectedFiles);
+    if (selectedFiles.length === 0) {
+        showStatus('❌ 请先选择要检验的凭证', 'error');
+        alert('请先选择要检验的凭证');
+        return;
+    }
+
+    if (!confirm(`确定要批量检验 ${selectedFiles.length} 个凭证的Project ID吗？\n\n将并行检验以加快速度。`)) {
+        return;
+    }
+
+    showStatus(`🔍 正在并行检验 ${selectedFiles.length} 个凭证，请稍候...`, 'info');
+
+    // 并行执行所有检验请求
+    const promises = selectedFiles.map(async (filename) => {
+        try {
+            const response = await fetch(`./creds/verify-project/${encodeURIComponent(filename)}`, {
+                method: 'POST',
+                headers: getAuthHeaders()
+            });
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                return { success: true, filename, projectId: data.project_id, message: data.message };
+            } else {
+                return { success: false, filename, error: data.message || '失败' };
+            }
+        } catch (error) {
+            return { success: false, filename, error: error.message };
+        }
+    });
+
+    // 等待所有请求完成
+    const results = await Promise.all(promises);
+
+    // 统计结果
+    let successCount = 0;
+    let failCount = 0;
+    const resultMessages = [];
+
+    results.forEach(result => {
+        if (result.success) {
+            successCount++;
+            resultMessages.push(`✅ ${result.filename}: ${result.projectId}`);
+        } else {
+            failCount++;
+            resultMessages.push(`❌ ${result.filename}: ${result.error}`);
+        }
+    });
+
+    await AppState.creds.refresh();
+
+    const summary = `批量检验完成！\n\n成功: ${successCount} 个\n失败: ${failCount} 个\n总计: ${selectedFiles.length} 个\n\n详细结果:\n${resultMessages.join('\n')}`;
+
+    if (failCount === 0) {
+        showStatus(`✅ 全部检验成功！成功检验 ${successCount}/${selectedFiles.length} 个凭证`, 'success');
+    } else if (successCount === 0) {
+        showStatus(`❌ 全部检验失败！失败 ${failCount}/${selectedFiles.length} 个凭证`, 'error');
+    } else {
+        showStatus(`⚠️ 批量检验完成：成功 ${successCount}/${selectedFiles.length} 个，失败 ${failCount} 个`, 'info');
+    }
+
+    console.log(summary);
+    alert(summary);
+}
+
+async function batchVerifyAntigravityProjectIds() {
+    const selectedFiles = Array.from(AppState.antigravityCreds.selectedFiles);
+    if (selectedFiles.length === 0) {
+        showStatus('❌ 请先选择要检验的Antigravity凭证', 'error');
+        alert('请先选择要检验的Antigravity凭证');
+        return;
+    }
+
+    if (!confirm(`确定要批量检验 ${selectedFiles.length} 个Antigravity凭证的Project ID吗？\n\n将并行检验以加快速度。`)) {
+        return;
+    }
+
+    showStatus(`🔍 正在并行检验 ${selectedFiles.length} 个Antigravity凭证，请稍候...`, 'info');
+
+    // 并行执行所有检验请求
+    const promises = selectedFiles.map(async (filename) => {
+        try {
+            const response = await fetch(`./antigravity/creds/verify-project/${encodeURIComponent(filename)}`, {
+                method: 'POST',
+                headers: getAuthHeaders()
+            });
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                return { success: true, filename, projectId: data.project_id, message: data.message };
+            } else {
+                return { success: false, filename, error: data.message || '失败' };
+            }
+        } catch (error) {
+            return { success: false, filename, error: error.message };
+        }
+    });
+
+    // 等待所有请求完成
+    const results = await Promise.all(promises);
+
+    // 统计结果
+    let successCount = 0;
+    let failCount = 0;
+    const resultMessages = [];
+
+    results.forEach(result => {
+        if (result.success) {
+            successCount++;
+            resultMessages.push(`✅ ${result.filename}: ${result.projectId}`);
+        } else {
+            failCount++;
+            resultMessages.push(`❌ ${result.filename}: ${result.error}`);
+        }
+    });
+
+    await AppState.antigravityCreds.refresh();
+
+    const summary = `Antigravity批量检验完成！\n\n成功: ${successCount} 个\n失败: ${failCount} 个\n总计: ${selectedFiles.length} 个\n\n详细结果:\n${resultMessages.join('\n')}`;
+
+    if (failCount === 0) {
+        showStatus(`✅ 全部检验成功！成功检验 ${successCount}/${selectedFiles.length} 个Antigravity凭证`, 'success');
+    } else if (successCount === 0) {
+        showStatus(`❌ 全部检验失败！失败 ${failCount}/${selectedFiles.length} 个Antigravity凭证`, 'error');
+    } else {
+        showStatus(`⚠️ 批量检验完成：成功 ${successCount}/${selectedFiles.length} 个，失败 ${failCount} 个`, 'info');
+    }
+
+    console.log(summary);
+    alert(summary);
+}
+
 
 async function refreshAllEmails() {
     if (!confirm('确定要刷新所有凭证的用户邮箱吗？这可能需要一些时间。')) return;
