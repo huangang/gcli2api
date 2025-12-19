@@ -617,7 +617,28 @@ def convert_anthropic_request_to_antigravity_components(payload: Dict[str, Any])
             elif isinstance(thinking_value, dict):
                 thinking_enabled = thinking_value.get("type", "enabled") == "enabled"
 
+    # 临时调试日志（无条件输出）
+    log.info(
+        f"[ANTHROPIC][thinking][DEBUG] convert_request: thinking_present={'thinking' in payload}, "
+        f"thinking_value={payload.get('thinking')}, thinking_enabled={thinking_enabled}"
+    )
+
     contents = convert_messages_to_contents(messages, thinking_enabled=thinking_enabled)
+
+    # 临时调试日志：检查转换后的 contents 中是否还有 thinking 块
+    has_thinking_in_contents = False
+    for content in contents:
+        for part in content.get("parts", []):
+            if isinstance(part, dict) and part.get("thought"):
+                has_thinking_in_contents = True
+                break
+        if has_thinking_in_contents:
+            break
+    log.info(
+        f"[ANTHROPIC][thinking][DEBUG] convert_result: has_thinking_in_contents={has_thinking_in_contents}, "
+        f"contents_count={len(contents)}"
+    )
+
     contents = reorganize_tool_messages(contents)
     system_instruction = build_system_instruction(payload.get("system"))
     tools = convert_tools(payload.get("tools"))
