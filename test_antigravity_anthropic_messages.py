@@ -360,6 +360,69 @@ def test_thinking_enabled_但最后一条_assistant_不以_thinking_开头_会�
     assert "thinkingConfig" not in components["generation_config"]
 
 
+def test_thinking_disabled_会过滤历史消息中的_thinking_块():
+    """
+    当 thinking 被禁用时，历史消息中的 thinking 和 redacted_thinking 块应该被过滤掉，
+    避免下游报错：When thinking is disabled, an assistant message cannot contain thinking.
+    """
+    payload = {
+        "model": "claude-3-5-sonnet-20241022",
+        "max_tokens": 128,
+        "thinking": None,  # thinking 被禁用
+        "messages": [
+            {"role": "user", "content": "hi"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "思考内容", "signature": "sig1"},
+                    {"type": "text", "text": "hello"},
+                ],
+            },
+            {"role": "user", "content": "continue"},
+        ],
+    }
+    components = convert_anthropic_request_to_antigravity_components(payload)
+
+    # 验证 thinkingConfig 未启用
+    assert "thinkingConfig" not in components["generation_config"]
+
+    # 验证历史消息中的 thinking 块被过滤掉了
+    # 第二条消息（assistant）应该只包含 text 部分
+    model_msg = next(msg for msg in components["contents"] if msg["role"] == "model")
+    assert len(model_msg["parts"]) == 1
+    assert model_msg["parts"][0] == {"text": "hello"}
+    # 确认没有 thought=True 的 part
+    assert not any(part.get("thought") for part in model_msg["parts"])
+
+
+def test_thinking_disabled_会过滤_redacted_thinking_块():
+    """
+    当 thinking 被禁用时，redacted_thinking 块也应该被过滤掉
+    """
+    payload = {
+        "model": "claude-3-5-sonnet-20241022",
+        "max_tokens": 128,
+        "thinking": {"type": "disabled"},  # 显式禁用
+        "messages": [
+            {"role": "user", "content": "hi"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "redacted_thinking", "thinking": "redacted", "signature": "sig1"},
+                    {"type": "text", "text": "response"},
+                ],
+            },
+        ],
+    }
+    components = convert_anthropic_request_to_antigravity_components(payload)
+
+    # 验证历史消息中的 redacted_thinking 块被过滤掉了
+    model_msg = next(msg for msg in components["contents"] if msg["role"] == "model")
+    assert len(model_msg["parts"]) == 1
+    assert model_msg["parts"][0] == {"text": "response"}
+    assert not any(part.get("thought") for part in model_msg["parts"])
+
+
 def test_antigravity_response_to_anthropic_message_映射_stop_reason_usage():
     response_data = {
         "response": {

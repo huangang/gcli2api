@@ -269,9 +269,13 @@ def _extract_tool_result_output(content: Any) -> str:
     return str(content)
 
 
-def convert_messages_to_contents(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def convert_messages_to_contents(messages: List[Dict[str, Any]], thinking_enabled: bool = True) -> List[Dict[str, Any]]:
     """
     将 Anthropic messages[] 转换为下游 contents[]（role: user/model, parts: []）。
+
+    Args:
+        messages: Anthropic messages 列表
+        thinking_enabled: 是否启用 thinking（如果为 False，将跳过历史消息中的 thinking 块）
     """
     contents: List[Dict[str, Any]] = []
 
@@ -293,8 +297,12 @@ def convert_messages_to_contents(messages: List[Dict[str, Any]]) -> List[Dict[st
 
                 item_type = item.get("type")
                 if item_type == "thinking":
+                    # 如果 thinking 被禁用，跳过历史消息中的 thinking 块（避免下游 400 错误）
+                    if not thinking_enabled:
+                        continue
+
                     # Anthropic 的历史 thinking block 在回放时通常要求携带 signature；
-                    # 若缺失 signature，下游可能会报 “thinking.signature: Field required”。
+                    # 若缺失 signature，下游可能会报 "thinking.signature: Field required"。
                     # 为保证兼容性，这里选择丢弃无 signature 的 thinking block。
                     signature = item.get("signature")
                     if not signature:
@@ -310,6 +318,10 @@ def convert_messages_to_contents(messages: List[Dict[str, Any]]) -> List[Dict[st
                     }
                     parts.append(part)
                 elif item_type == "redacted_thinking":
+                    # 如果 thinking 被禁用，跳过历史消息中的 redacted_thinking 块（避免下游 400 错误）
+                    if not thinking_enabled:
+                        continue
+
                     signature = item.get("signature")
                     if not signature:
                         continue
@@ -595,7 +607,17 @@ def convert_anthropic_request_to_antigravity_components(payload: Dict[str, Any])
     if not isinstance(messages, list):
         messages = []
 
-    contents = convert_messages_to_contents(messages)
+    # 检查 thinking 是否被启用
+    thinking_enabled = False
+    if "thinking" in payload:
+        thinking_value = payload.get("thinking")
+        if thinking_value is not None:
+            if isinstance(thinking_value, bool):
+                thinking_enabled = thinking_value
+            elif isinstance(thinking_value, dict):
+                thinking_enabled = thinking_value.get("type", "enabled") == "enabled"
+
+    contents = convert_messages_to_contents(messages, thinking_enabled=thinking_enabled)
     contents = reorganize_tool_messages(contents)
     system_instruction = build_system_instruction(payload.get("system"))
     tools = convert_tools(payload.get("tools"))
