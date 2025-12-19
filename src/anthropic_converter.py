@@ -645,6 +645,7 @@ def convert_anthropic_request_to_antigravity_components(payload: Dict[str, Any])
     generation_config = build_generation_config(payload)
 
     # 重组后再次检查：如果 thinkingConfig 已启用，验证最后一条 model 消息是否以 thinking 开头
+    thinking_config_removed = False
     if "thinkingConfig" in generation_config and generation_config["thinkingConfig"].get("includeThoughts"):
         last_model_msg = None
         for msg in reversed(contents):
@@ -663,6 +664,17 @@ def convert_anthropic_request_to_antigravity_components(payload: Dict[str, Any])
                         "已移除 thinkingConfig（避免下游 400）"
                     )
                     generation_config.pop("thinkingConfig", None)
+                    thinking_config_removed = True
+
+    # 如果 thinkingConfig 被移除，需要同时移除 contents 中的所有 thinking 块
+    # 因为下游会认为 thinking 被禁用，不允许消息中包含 thinking
+    if thinking_config_removed or "thinkingConfig" not in generation_config:
+        log.info("[ANTHROPIC][thinking] thinkingConfig 未启用，移除 contents 中的所有 thinking 块")
+        for content in contents:
+            parts = content.get("parts", [])
+            # 过滤掉所有 thought=True 的 part
+            filtered_parts = [part for part in parts if not (isinstance(part, dict) and part.get("thought"))]
+            content["parts"] = filtered_parts
 
     return {
         "model": model,
