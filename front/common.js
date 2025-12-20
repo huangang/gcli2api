@@ -120,7 +120,13 @@ function createCredsManager(type) {
                     });
 
                     this.totalCount = data.total;
-                    this.calculateStats();
+                    // 使用后端返回的全局统计数据
+                    if (data.stats) {
+                        this.statsData = data.stats;
+                    } else {
+                        // 兼容旧版本后端
+                        this.calculateStats();
+                    }
                     this.updateStatsDisplay();
                     this.filteredData = this.data;
                     this.renderList();
@@ -141,7 +147,7 @@ function createCredsManager(type) {
             }
         },
 
-        // 计算统计数据
+        // 计算统计数据（仅用于兼容旧版本后端）
         calculateStats() {
             this.statsData = { total: this.totalCount, normal: 0, disabled: 0 };
             Object.values(this.data).forEach(credInfo => {
@@ -352,7 +358,7 @@ function createUploadManager(type) {
         addFiles(files) {
             files.forEach(file => {
                 const isValid = file.type === 'application/json' || file.name.endsWith('.json') ||
-                               file.type === 'application/zip' || file.name.endsWith('.zip');
+                    file.type === 'application/zip' || file.name.endsWith('.zip');
 
                 if (isValid) {
                     if (!this.selectedFiles.find(f => f.name === file.name && f.size === file.size)) {
@@ -487,7 +493,26 @@ function createUploadManager(type) {
 function showStatus(message, type = 'info') {
     const statusSection = document.getElementById('statusSection');
     if (statusSection) {
+        // 清除之前的定时器
+        if (window._statusTimeout) {
+            clearTimeout(window._statusTimeout);
+        }
+
+        // 创建新的 toast
         statusSection.innerHTML = `<div class="status ${type}">${message}</div>`;
+        const statusDiv = statusSection.querySelector('.status');
+
+        // 强制重绘以触发动画
+        statusDiv.offsetHeight;
+        statusDiv.classList.add('show');
+
+        // 3秒后淡出并移除
+        window._statusTimeout = setTimeout(() => {
+            statusDiv.classList.add('fade-out');
+            setTimeout(() => {
+                statusSection.innerHTML = '';
+            }, 300); // 等待淡出动画完成
+        }, 3000);
     } else {
         alert(message);
     }
@@ -583,6 +608,7 @@ function createCredCard(credInfo, manager) {
         <button class="cred-btn view" onclick="toggle${isAntigravity ? 'Antigravity' : ''}CredDetails('${pathId}')">查看内容</button>
         <button class="cred-btn download" onclick="download${isAntigravity ? 'Antigravity' : ''}Cred('${filename}')">下载</button>
         <button class="cred-btn email" onclick="fetch${isAntigravity ? 'Antigravity' : ''}UserEmail('${filename}')">查看账号邮箱</button>
+        ${isAntigravity ? `<button class="cred-btn" style="background-color: #17a2b8;" onclick="toggleAntigravityQuotaDetails('${pathId}')" title="查看该凭证的额度信息">查看额度</button>` : ''}
         <button class="cred-btn" style="background-color: #ff9800;" onclick="verify${isAntigravity ? 'Antigravity' : ''}ProjectId('${filename}')" title="重新获取Project ID，可恢复403错误">检验</button>
         <button class="cred-btn delete" data-filename="${filename}" data-action="delete">删除</button>
     `;
@@ -609,11 +635,18 @@ function createCredCard(credInfo, manager) {
         <div class="cred-details" id="details-${pathId}">
             <div class="cred-content" data-filename="${filename}" data-loaded="false">点击"查看内容"按钮加载文件详情...</div>
         </div>
+        ${isAntigravity ? `
+        <div class="cred-quota-details" id="quota-${pathId}" style="display: none;">
+            <div class="cred-quota-content" data-filename="${filename}" data-loaded="false">
+                点击"查看额度"按钮加载额度信息...
+            </div>
+        </div>
+        ` : ''}
     `;
 
     // 添加事件监听
     div.querySelectorAll('[data-filename][data-action]').forEach(button => {
-        button.addEventListener('click', function() {
+        button.addEventListener('click', function () {
             const fn = this.getAttribute('data-filename');
             const action = this.getAttribute('data-action');
             if (action === 'delete') {
@@ -711,6 +744,8 @@ async function login() {
             document.getElementById('loginSection').classList.add('hidden');
             document.getElementById('mainSection').classList.remove('hidden');
             showStatus('登录成功', 'success');
+            // 显示面板后初始化滑块
+            requestAnimationFrame(() => initTabSlider());
         } else {
             showStatus(`登录失败: ${data.detail || data.error || '未知错误'}`, 'error');
         }
@@ -737,6 +772,8 @@ async function autoLogin() {
             document.getElementById('loginSection').classList.add('hidden');
             document.getElementById('mainSection').classList.remove('hidden');
             showStatus('自动登录成功', 'success');
+            // 显示面板后初始化滑块
+            requestAnimationFrame(() => initTabSlider());
             return true;
         } else if (response.status === 401) {
             localStorage.removeItem('gcli2api_auth_token');
@@ -766,18 +803,134 @@ function handlePasswordEnter(event) {
 // =====================================================================
 // 标签页切换
 // =====================================================================
+
+// 更新滑块位置
+function updateTabSlider(targetTab, animate = true) {
+    const slider = document.querySelector('.tab-slider');
+    const tabs = document.querySelector('.tabs');
+    if (!slider || !tabs || !targetTab) return;
+
+    // 获取按钮位置和容器宽度
+    const tabLeft = targetTab.offsetLeft;
+    const tabWidth = targetTab.offsetWidth;
+    const tabsWidth = tabs.scrollWidth;
+
+    // 使用 left 和 right 同时控制，确保动画同步
+    const rightValue = tabsWidth - tabLeft - tabWidth;
+
+    if (animate) {
+        slider.style.left = `${tabLeft}px`;
+        slider.style.right = `${rightValue}px`;
+    } else {
+        // 首次加载时不使用动画
+        slider.style.transition = 'none';
+        slider.style.left = `${tabLeft}px`;
+        slider.style.right = `${rightValue}px`;
+        // 强制重绘后恢复过渡
+        slider.offsetHeight;
+        slider.style.transition = '';
+    }
+}
+
+// 初始化滑块位置
+function initTabSlider() {
+    const activeTab = document.querySelector('.tab.active');
+    if (activeTab) {
+        updateTabSlider(activeTab, false);
+    }
+}
+
+// 页面加载和窗口大小变化时初始化滑块
+document.addEventListener('DOMContentLoaded', initTabSlider);
+window.addEventListener('resize', () => {
+    const activeTab = document.querySelector('.tab.active');
+    if (activeTab) updateTabSlider(activeTab, false);
+});
+
 function switchTab(tabName) {
+    // 获取当前活动的内容区域
+    const currentContent = document.querySelector('.tab-content.active');
+    const targetContent = document.getElementById(tabName + 'Tab');
+
+    // 如果点击的是当前标签页，不做任何操作
+    if (currentContent === targetContent) return;
+
+    // 找到目标标签按钮
+    const targetTab = event && event.target ? event.target :
+        document.querySelector(`.tab[onclick*="'${tabName}'"]`);
+
+    // 移除所有标签页的active状态
     document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
 
-    event.target.classList.add('active');
-    document.getElementById(tabName + 'Tab').classList.add('active');
+    // 添加当前点击标签的active状态
+    if (targetTab) {
+        targetTab.classList.add('active');
+        // 更新滑块位置（带动画）
+        updateTabSlider(targetTab, true);
+    }
 
+    // 淡出当前内容
+    if (currentContent) {
+        // 设置淡出过渡
+        currentContent.style.transition = 'opacity 0.18s ease-out, transform 0.18s ease-out';
+        currentContent.style.opacity = '0';
+        currentContent.style.transform = 'translateX(-12px)';
+
+        setTimeout(() => {
+            currentContent.classList.remove('active');
+            currentContent.style.transition = '';
+            currentContent.style.opacity = '';
+            currentContent.style.transform = '';
+
+            // 淡入新内容
+            if (targetContent) {
+                // 先设置初始状态（在添加 active 类之前）
+                targetContent.style.opacity = '0';
+                targetContent.style.transform = 'translateX(12px)';
+                targetContent.style.transition = 'none'; // 暂时禁用过渡
+
+                // 添加 active 类使元素可见
+                targetContent.classList.add('active');
+
+                // 使用双重 requestAnimationFrame 确保浏览器完成重绘
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        // 启用过渡并应用最终状态
+                        targetContent.style.transition = 'opacity 0.25s ease-out, transform 0.25s ease-out';
+                        targetContent.style.opacity = '1';
+                        targetContent.style.transform = 'translateX(0)';
+
+                        // 清理内联样式并执行数据加载
+                        setTimeout(() => {
+                            targetContent.style.transition = '';
+                            targetContent.style.opacity = '';
+                            targetContent.style.transform = '';
+
+                            // 动画完成后触发数据加载
+                            triggerTabDataLoad(tabName);
+                        }, 260);
+                    });
+                });
+            }
+        }, 180);
+    } else {
+        // 如果没有当前内容（首次加载），直接显示目标内容
+        if (targetContent) {
+            targetContent.classList.add('active');
+            // 直接触发数据加载
+            triggerTabDataLoad(tabName);
+        }
+    }
+}
+
+// 标签页数据加载（从动画中分离出来）
+function triggerTabDataLoad(tabName) {
     if (tabName === 'manage') AppState.creds.refresh();
     if (tabName === 'antigravity-manage') AppState.antigravityCreds.refresh();
     if (tabName === 'config') loadConfig();
     if (tabName === 'logs') connectWebSocket();
 }
+
 
 // =====================================================================
 // OAuth认证相关函数
@@ -1273,6 +1426,32 @@ function clearAntigravityFiles() { AppState.antigravityUploadFiles.clearFiles();
 function uploadAntigravityFiles() { AppState.antigravityUploadFiles.upload(); }
 
 // 邮箱相关
+// 辅助函数：根据文件名更新卡片中的邮箱显示
+function updateEmailDisplay(filename, email, isAntigravity = false) {
+    // 查找对应的凭证卡片
+    const containerId = isAntigravity ? 'antigravityCredsList' : 'credsList';
+    const container = document.getElementById(containerId);
+    if (!container) return false;
+
+    // 通过 data-filename 找到对应的复选框，再找到其父卡片
+    const checkbox = container.querySelector(`input[data-filename="${filename}"]`);
+    if (!checkbox) return false;
+
+    // 找到对应的 cred-card 元素
+    const card = checkbox.closest('.cred-card');
+    if (!card) return false;
+
+    // 找到邮箱显示元素
+    const emailDiv = card.querySelector('.cred-email');
+    if (emailDiv) {
+        emailDiv.textContent = email;
+        emailDiv.style.color = '#666';
+        emailDiv.style.fontStyle = 'normal';
+        return true;
+    }
+    return false;
+}
+
 async function fetchUserEmail(filename) {
     try {
         showStatus('正在获取用户邮箱...', 'info');
@@ -1283,7 +1462,8 @@ async function fetchUserEmail(filename) {
         const data = await response.json();
         if (response.ok && data.user_email) {
             showStatus(`成功获取邮箱: ${data.user_email}`, 'success');
-            await AppState.creds.refresh();
+            // 直接更新卡片中的邮箱显示，不刷新整个列表
+            updateEmailDisplay(filename, data.user_email, false);
         } else {
             showStatus(data.message || '无法获取用户邮箱', 'error');
         }
@@ -1302,7 +1482,8 @@ async function fetchAntigravityUserEmail(filename) {
         const data = await response.json();
         if (response.ok && data.user_email) {
             showStatus(`成功获取邮箱: ${data.user_email}`, 'success');
-            await AppState.antigravityCreds.refresh();
+            // 直接更新卡片中的邮箱显示，不刷新整个列表
+            updateEmailDisplay(filename, data.user_email, true);
         } else {
             showStatus(data.message || '无法获取用户邮箱', 'error');
         }
@@ -1374,6 +1555,139 @@ async function verifyAntigravityProjectId(filename) {
         const errorMsg = `检验失败: ${error.message}`;
         showStatus(`❌ ${errorMsg}`, 'error');
         alert(`❌ ${errorMsg}`);
+    }
+}
+
+async function toggleAntigravityQuotaDetails(pathId) {
+    const quotaDetails = document.getElementById('quota-' + pathId);
+    if (!quotaDetails) return;
+
+    // 切换显示状态
+    const isShowing = quotaDetails.style.display === 'block';
+
+    if (isShowing) {
+        // 收起
+        quotaDetails.style.display = 'none';
+    } else {
+        // 展开
+        quotaDetails.style.display = 'block';
+
+        const contentDiv = quotaDetails.querySelector('.cred-quota-content');
+        const filename = contentDiv.getAttribute('data-filename');
+        const loaded = contentDiv.getAttribute('data-loaded');
+
+        // 如果还没加载过，则加载数据
+        if (loaded === 'false' && filename) {
+            contentDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">📊 正在加载额度信息...</div>';
+
+            try {
+                const response = await fetch(`./antigravity/creds/quota/${encodeURIComponent(filename)}`, {
+                    method: 'GET',
+                    headers: getAuthHeaders()
+                });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    // 成功时渲染美化的额度信息
+                    const models = data.models || {};
+
+                    if (Object.keys(models).length === 0) {
+                        contentDiv.innerHTML = `
+                            <div style="text-align: center; padding: 20px; color: #999;">
+                                <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
+                                <div>暂无额度信息</div>
+                            </div>
+                        `;
+                    } else {
+                        let quotaHTML = `
+                            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px 8px 0 0; margin: -10px -10px 15px -10px;">
+                                <h4 style="margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 20px;">📊</span>
+                                    <span>额度信息详情</span>
+                                </h4>
+                                <div style="font-size: 12px; opacity: 0.9; margin-top: 5px;">文件: ${filename}</div>
+                            </div>
+                            <div style="display: grid; gap: 12px;">
+                        `;
+
+                        for (const [modelName, quotaData] of Object.entries(models)) {
+                            // 后端返回的是剩余比例 (0-1)，不是绝对数量
+                            const remainingFraction = quotaData.remaining || 0;
+                            const resetTime = quotaData.resetTime || 'N/A';
+
+                            // 计算已使用百分比（1 - 剩余比例）
+                            const usedPercentage = Math.round((1 - remainingFraction) * 100);
+                            const remainingPercentage = Math.round(remainingFraction * 100);
+
+                            // 根据使用情况选择颜色
+                            let percentageColor = '#28a745'; // 绿色：使用少
+                            if (usedPercentage >= 90) percentageColor = '#dc3545'; // 红色：使用多
+                            else if (usedPercentage >= 70) percentageColor = '#ffc107'; // 黄色：使用较多
+                            else if (usedPercentage >= 50) percentageColor = '#17a2b8'; // 蓝色：使用中等
+
+                            quotaHTML += `
+                                <div style="background: #f8f9fa; border: 1px solid #e1e4e8; border-radius: 8px; padding: 12px; border-left: 4px solid #17a2b8;">
+                                    <div style="font-weight: bold; color: #333; margin-bottom: 8px; font-size: 14px;">
+                                        🔹 ${modelName}
+                                    </div>
+
+                                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px;">
+                                        <div style="background: white; padding: 8px; border-radius: 4px; border: 1px solid #dee2e6;">
+                                            <div style="font-size: 11px; color: #666; margin-bottom: 2px;">剩余额度</div>
+                                            <div style="font-size: 18px; font-weight: bold; color: #28a745;">${remainingPercentage}%</div>
+                                        </div>
+                                        <div style="background: white; padding: 8px; border-radius: 4px; border: 1px solid #dee2e6;">
+                                            <div style="font-size: 11px; color: #666; margin-bottom: 2px;">已使用</div>
+                                            <div style="font-size: 18px; font-weight: bold; color: #dc3545;">${usedPercentage}%</div>
+                                        </div>
+                                        <div style="background: white; padding: 8px; border-radius: 4px; border: 1px solid #dee2e6; grid-column: span 2;">
+                                            <div style="font-size: 11px; color: #666; margin-bottom: 2px;">重置时间</div>
+                                            <div style="font-size: 14px; font-weight: bold; color: #666;">${resetTime}</div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                            <span style="font-size: 11px; color: #666;">使用进度</span>
+                                            <span style="font-size: 12px; font-weight: bold; color: ${percentageColor};">${usedPercentage}%</span>
+                                        </div>
+                                        <div style="width: 100%; height: 10px; background-color: #e9ecef; border-radius: 5px; overflow: hidden;">
+                                            <div style="width: ${usedPercentage}%; height: 100%; background-color: ${percentageColor}; transition: width 0.3s ease;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+
+                        quotaHTML += '</div>';
+                        contentDiv.innerHTML = quotaHTML;
+                    }
+
+                    contentDiv.setAttribute('data-loaded', 'true');
+                    showStatus('✅ 成功加载额度信息', 'success');
+                } else {
+                    // 失败时显示错误
+                    const errorMsg = data.error || '获取额度信息失败';
+                    contentDiv.innerHTML = `
+                        <div style="text-align: center; padding: 20px; color: #dc3545;">
+                            <div style="font-size: 48px; margin-bottom: 10px;">❌</div>
+                            <div style="font-weight: bold; margin-bottom: 5px;">获取额度信息失败</div>
+                            <div style="font-size: 13px; color: #666;">${errorMsg}</div>
+                        </div>
+                    `;
+                    showStatus(`❌ ${errorMsg}`, 'error');
+                }
+            } catch (error) {
+                contentDiv.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #dc3545;">
+                        <div style="font-size: 48px; margin-bottom: 10px;">❌</div>
+                        <div style="font-weight: bold; margin-bottom: 5px;">网络错误</div>
+                        <div style="font-size: 13px; color: #666;">${error.message}</div>
+                    </div>
+                `;
+                showStatus(`❌ 获取额度信息失败: ${error.message}`, 'error');
+            }
+        }
     }
 }
 
@@ -2177,7 +2491,7 @@ function updateCooldownDisplays() {
 // =====================================================================
 // 页面初始化
 // =====================================================================
-window.onload = async function() {
+window.onload = async function () {
     const autoLoginSuccess = await autoLogin();
 
     if (!autoLoginSuccess) {
@@ -2193,7 +2507,7 @@ window.onload = async function() {
 };
 
 // 拖拽功能 - 初始化
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const uploadArea = document.getElementById('uploadArea');
 
     if (uploadArea) {

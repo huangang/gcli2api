@@ -7,11 +7,11 @@
     <title>GCLI2API 控制面板</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
             max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
+            background-color: #f8f9fa;
         }
 
         .container {
@@ -19,6 +19,8 @@
             padding: 30px;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+            overflow-x: auto;
         }
 
         h1 {
@@ -104,6 +106,65 @@
             overflow-y: auto;
         }
 
+        /* Toast 固定定位在右上角 */
+        #statusSection {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            left: auto;
+            transform: none;
+            z-index: 9999;
+            width: auto;
+            max-width: 400px;
+            min-width: 250px;
+        }
+
+        /* Toast 专用样式 - 只在 #statusSection 内生效 */
+        #statusSection .status {
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 0;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transform: translateX(100%);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        #statusSection .status.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        #statusSection .status.fade-out {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+
+        #statusSection .status.success {
+            background-color: #28a745;
+            border: none;
+            color: white;
+        }
+
+        #statusSection .status.error {
+            background-color: #dc3545;
+            border: none;
+            color: white;
+        }
+
+        #statusSection .status.warning {
+            background-color: #ffc107;
+            border: none;
+            color: #212529;
+        }
+
+        #statusSection .status.info {
+            background-color: #17a2b8;
+            border: none;
+            color: white;
+        }
+
+        /* 页面内嵌的 status 样式 - 保持原有风格 */
         .status {
             padding: 10px;
             border-radius: 5px;
@@ -153,27 +214,149 @@
         }
 
         .tabs {
-            display: flex;
-            border-bottom: 1px solid #ddd;
-            margin-bottom: 20px;
+            display: inline-flex;
+            background: linear-gradient(145deg, #f5f5f7, #e8e8ed);
+            padding: 6px;
+            border-radius: 14px;
+            margin-bottom: 25px;
+            border-bottom: none;
+            gap: 3px;
+            overflow-x: auto;
+            max-width: 100%;
+            user-select: none;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06),
+                0 1px 2px rgba(255, 255, 255, 0.9);
+            position: relative;
+        }
+
+        /* 滑块指示器 */
+        .tab-slider {
+            position: absolute;
+            top: 6px;
+            left: 0;
+            right: 0;
+            height: calc(100% - 12px);
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1),
+                0 1px 3px rgba(0, 0, 0, 0.06),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.02);
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* 滑块微光效果 */
+        .tab-slider::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50%;
+            background: linear-gradient(180deg,
+                    rgba(255, 255, 255, 0.8) 0%,
+                    rgba(255, 255, 255, 0) 100%);
+            border-radius: 10px 10px 0 0;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        .tabs::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .tabs::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .tabs::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 2px;
+        }
+
+        .tabs::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.25);
         }
 
         .tab {
-            padding: 10px 20px;
+            padding: 10px 18px;
             cursor: pointer;
             border: none;
-            background: #f5f5f5;
-            border-bottom: 2px solid transparent;
+            background: transparent;
+            border-radius: 10px;
+            color: #666;
+            font-size: 14px;
+            font-weight: 450;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        /* 点击波纹效果 */
+        .tab::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(66, 133, 244, 0.15);
+            transform: translate(-50%, -50%);
+            transition: width 0.4s ease, height 0.4s ease;
+            z-index: -1;
+        }
+
+        .tab:active::before {
+            width: 200%;
+            height: 200%;
         }
 
         .tab.active {
-            background: white;
-            border-bottom-color: #4285f4;
-            color: #4285f4;
+            color: #1a1a1a;
+            font-weight: 550;
+            transform: translateY(0);
+            /* 背景和阴影由滑块提供 */
+        }
+
+        .tab:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.6);
+            color: #333;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        }
+
+        /* 按压效果 */
+        .tab:active {
+            transform: scale(0.97) translateY(0);
+            transition: transform 0.1s ease;
+        }
+
+        .tab.active:active {
+            transform: scale(0.98);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08),
+                inset 0 1px 2px rgba(0, 0, 0, 0.02);
+        }
+
+        /* 焦点状态（键盘导航） */
+        .tab:focus {
+            outline: none;
+        }
+
+        .tab:focus-visible {
+            outline: 2px solid rgba(66, 133, 244, 0.5);
+            outline-offset: 2px;
         }
 
         .tab-content {
             display: none;
+            width: 100%;
+            box-sizing: border-box;
+            /* 动画由 JavaScript 控制，避免冲突 */
         }
 
         .tab-content.active {
@@ -266,7 +449,8 @@
             padding: 15px;
             margin: 10px 0;
             position: relative;
-            min-width: 600px;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         .cred-card.disabled {
@@ -416,6 +600,31 @@
             word-break: break-all;
             max-height: 200px;
             overflow-y: auto;
+        }
+
+        /* 额度信息显示样式 */
+        .cred-quota-details {
+            margin-top: 10px;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .cred-quota-content {
+            background: linear-gradient(to bottom, #ffffff, #f8f9fa);
+            border: 2px solid #17a2b8;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 8px rgba(23, 162, 184, 0.15);
         }
 
         .manage-actions {
@@ -1052,13 +1261,15 @@
         <div id="mainSection" class="hidden">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h1 style="margin: 0;">GCLI2API 管理面板</h1>
-                <button onclick="logout()" style="padding: 8px 20px; background-color: #dc3545; color: white; border: none; border-radius: 5px; font-size: 14px; cursor: pointer;">
+                <button onclick="logout()"
+                    style="padding: 8px 20px; background-color: #dc3545; color: white; border: none; border-radius: 5px; font-size: 14px; cursor: pointer;">
                     退出登录
                 </button>
             </div>
 
             <!-- 标签页 -->
             <div class="tabs">
+                <div class="tab-slider"></div>
                 <button class="tab active" onclick="switchTab('oauth')">OAuth认证</button>
                 <button class="tab" onclick="switchTab('antigravity')">Antigravity认证</button>
                 <button class="tab" onclick="switchTab('upload')">批量上传</button>
@@ -1264,7 +1475,8 @@
                         </div>
                     </div>
 
-                    <button class="btn" id="getAntigravityCredsBtn" onclick="getAntigravityCredentials()">获取 Antigravity 凭证</button>
+                    <button class="btn" id="getAntigravityCredsBtn" onclick="getAntigravityCredentials()">获取 Antigravity
+                        凭证</button>
 
                     <div id="antigravityCredsSection" class="hidden">
                         <h3>Antigravity 凭证内容：</h3>
@@ -1282,8 +1494,10 @@
                 <p>支持批量上传 GCLI 和 Antigravity 认证文件</p>
 
                 <!-- GCLI凭证上传区域 -->
-                <div style="margin-bottom: 30px; padding: 20px; border: 2px solid #e1e4e8; border-radius: 8px; background: #f8f9fa;">
-                    <h4 style="margin-top: 0; color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 10px;">📤 GCLI 凭证批量上传</h4>
+                <div
+                    style="margin-bottom: 30px; padding: 20px; border: 2px solid #e1e4e8; border-radius: 8px; background: #f8f9fa;">
+                    <h4 style="margin-top: 0; color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 10px;">
+                        📤 GCLI 凭证批量上传</h4>
 
                     <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
                         <p>点击选择文件或拖拽文件到此区域</p>
@@ -1314,9 +1528,11 @@
 
                 <!-- Antigravity凭证上传区域 -->
                 <div style="padding: 20px; border: 2px solid #e1e4e8; border-radius: 8px; background: #f8f9fa;">
-                    <h4 style="margin-top: 0; color: #28a745; border-bottom: 2px solid #28a745; padding-bottom: 10px;">📤 Antigravity 凭证批量上传</h4>
+                    <h4 style="margin-top: 0; color: #28a745; border-bottom: 2px solid #28a745; padding-bottom: 10px;">
+                        📤 Antigravity 凭证批量上传</h4>
 
-                    <div class="upload-area" style="border-color: #28a745;" onclick="document.getElementById('antigravityFileInput').click()"
+                    <div class="upload-area" style="border-color: #28a745;"
+                        onclick="document.getElementById('antigravityFileInput').click()"
                         ondragover="event.preventDefault(); this.style.borderColor='#28a745'; this.style.backgroundColor='#e7f9e7';"
                         ondragleave="this.style.borderColor='#ddd'; this.style.backgroundColor='#fafafa';"
                         ondrop="handleAntigravityFileDrop(event)">
@@ -1331,8 +1547,10 @@
                     <div id="antigravityFileListSection" class="hidden">
                         <h4>选择的文件：</h4>
                         <div class="file-list" id="antigravityFileList"></div>
-                        <button class="btn" style="background-color: #28a745;" onclick="uploadAntigravityFiles()">上传文件</button>
-                        <button class="btn" style="background-color: #6c757d;" onclick="clearAntigravityFiles()">清空列表</button>
+                        <button class="btn" style="background-color: #28a745;"
+                            onclick="uploadAntigravityFiles()">上传文件</button>
+                        <button class="btn" style="background-color: #6c757d;"
+                            onclick="clearAntigravityFiles()">清空列表</button>
                     </div>
 
                     <div id="antigravityUploadProgressSection" class="hidden">
@@ -1399,7 +1617,8 @@
                             disabled>批量禁用</button>
                         <button class="batch-btn batch-delete" id="batchDeleteBtn" onclick="batchAction('delete')"
                             disabled>批量删除</button>
-                        <button class="batch-btn" style="background-color: #ff9800;" id="batchVerifyBtn" onclick="batchVerifyProjectIds()" disabled>批量检验</button>
+                        <button class="batch-btn" style="background-color: #ff9800;" id="batchVerifyBtn"
+                            onclick="batchVerifyProjectIds()" disabled>批量检验</button>
                         <button class="batch-btn batch-email" onclick="refreshAllEmails()">刷新所有邮箱</button>
                     </div>
                 </div>
@@ -1514,13 +1733,14 @@
                             <label for="selectAllAntigravityCheckbox">全选</label>
                         </div>
                         <span class="selected-count" id="antigravitySelectedCount">已选择 0 项</span>
-                        <button class="batch-btn batch-enable" id="antigravityBatchEnableBtn" onclick="batchAntigravityAction('enable')"
-                            disabled>批量启用</button>
-                        <button class="batch-btn batch-disable" id="antigravityBatchDisableBtn" onclick="batchAntigravityAction('disable')"
-                            disabled>批量禁用</button>
-                        <button class="batch-btn batch-delete" id="antigravityBatchDeleteBtn" onclick="batchAntigravityAction('delete')"
-                            disabled>批量删除</button>
-                        <button class="batch-btn" style="background-color: #ff9800;" id="antigravityBatchVerifyBtn" onclick="batchVerifyAntigravityProjectIds()" disabled>批量检验</button>
+                        <button class="batch-btn batch-enable" id="antigravityBatchEnableBtn"
+                            onclick="batchAntigravityAction('enable')" disabled>批量启用</button>
+                        <button class="batch-btn batch-disable" id="antigravityBatchDisableBtn"
+                            onclick="batchAntigravityAction('disable')" disabled>批量禁用</button>
+                        <button class="batch-btn batch-delete" id="antigravityBatchDeleteBtn"
+                            onclick="batchAntigravityAction('delete')" disabled>批量删除</button>
+                        <button class="batch-btn" style="background-color: #ff9800;" id="antigravityBatchVerifyBtn"
+                            onclick="batchVerifyAntigravityProjectIds()" disabled>批量检验</button>
                         <button class="batch-btn batch-email" onclick="refreshAllAntigravityEmails()">刷新所有邮箱</button>
                     </div>
                 </div>
@@ -1528,14 +1748,16 @@
                 <!-- 筛选和分页控件 -->
                 <div class="filter-container">
                     <label for="antigravityStatusFilter">凭证状态：</label>
-                    <select id="antigravityStatusFilter" class="filter-select" onchange="applyAntigravityStatusFilter()">
+                    <select id="antigravityStatusFilter" class="filter-select"
+                        onchange="applyAntigravityStatusFilter()">
                         <option value="all">全部凭证</option>
                         <option value="enabled">仅启用</option>
                         <option value="disabled">仅禁用</option>
                     </select>
 
                     <label for="antigravityErrorCodeFilter" style="margin-left: 20px;">错误码：</label>
-                    <select id="antigravityErrorCodeFilter" class="filter-select" onchange="applyAntigravityStatusFilter()">
+                    <select id="antigravityErrorCodeFilter" class="filter-select"
+                        onchange="applyAntigravityStatusFilter()">
                         <option value="all">全部</option>
                         <option value="400">400</option>
                         <option value="403">403</option>
@@ -1544,14 +1766,16 @@
                     </select>
 
                     <label for="antigravityCooldownFilter" style="margin-left: 20px;">冷却状态：</label>
-                    <select id="antigravityCooldownFilter" class="filter-select" onchange="applyAntigravityStatusFilter()">
+                    <select id="antigravityCooldownFilter" class="filter-select"
+                        onchange="applyAntigravityStatusFilter()">
                         <option value="all">全部</option>
                         <option value="in_cooldown">CD中</option>
                         <option value="no_cooldown">未CD</option>
                     </select>
 
                     <label for="antigravityPageSizeSelect" style="margin-left: 20px;">每页显示：</label>
-                    <select id="antigravityPageSizeSelect" class="page-size-select" onchange="changeAntigravityPageSize()">
+                    <select id="antigravityPageSizeSelect" class="page-size-select"
+                        onchange="changeAntigravityPageSize()">
                         <option value="20">20</option>
                         <option value="50">50</option>
                         <option value="100">100</option>
@@ -1567,9 +1791,11 @@
 
                     <!-- 分页控件 -->
                     <div class="pagination-container" id="antigravityPaginationContainer" style="display: none;">
-                        <button class="pagination-btn" id="antigravityPrevPageBtn" onclick="changeAntigravityPage(-1)">上一页</button>
+                        <button class="pagination-btn" id="antigravityPrevPageBtn"
+                            onclick="changeAntigravityPage(-1)">上一页</button>
                         <div class="pagination-info" id="antigravityPaginationInfo">第 1 页，共 1 页</div>
-                        <button class="pagination-btn" id="antigravityNextPageBtn" onclick="changeAntigravityPage(1)">下一页</button>
+                        <button class="pagination-btn" id="antigravityNextPageBtn"
+                            onclick="changeAntigravityPage(1)">下一页</button>
                     </div>
                 </div>
             </div>
@@ -1766,7 +1992,8 @@
                                         style="color: #28a745;">✓ 支持热更新</span></small>
                                 <div class="config-info"
                                     style="background-color: #e3f2fd; border: 1px solid #2196f3; color: #0d47a1;">
-                                    <strong>💭 说明：</strong>某些模型（如Gemini 2.0 Pro）支持thinking模式，会在生成回答前先输出思考过程。启用后可以看到模型的思考过程；禁用后只显示最终回答，让输出更简洁。
+                                    <strong>💭 说明：</strong>某些模型（如Gemini 2.0
+                                    Pro）支持thinking模式，会在生成回答前先输出思考过程。启用后可以看到模型的思考过程；禁用后只显示最终回答，让输出更简洁。
                                 </div>
                             </div>
                         </div>
@@ -1930,7 +2157,9 @@
                         style="display: inline-block; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 15px rgba(0,0,0,0.1); margin-top: 10px;">
                         <img src="docs/qq群.jpg" alt="QQ群二维码"
                             style="width: 200px; height: 200px; border-radius: 8px; display: block;">
-                        <p style="color: #666; margin: 10px 0 0 0; font-size: 13px; font-weight: 600; text-align: center;">扫码加入QQ群</p>
+                        <p
+                            style="color: #666; margin: 10px 0 0 0; font-size: 13px; font-weight: 600; text-align: center;">
+                            扫码加入QQ群</p>
                     </div>
                 </div>
 
