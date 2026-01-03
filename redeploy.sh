@@ -110,6 +110,17 @@ wait_for_healthy() {
                 sleep 10
                 return 0
             fi
+        elif [ "$health_status" = "starting" ]; then
+            # 仍在启动中,继续等待
+            :
+        elif [ "$health_status" = "unhealthy" ]; then
+            # 检查是否是认证问题(403),如果是则服务实际已启动
+            local last_output=$(docker inspect --format='{{range .State.Health.Log}}{{.Output}}{{end}}' $container_name 2>/dev/null | tail -c 500)
+            if echo "$last_output" | grep -q "HTTP Error 403"; then
+                log_warning "健康检查返回 403 (认证问题),但服务已启动"
+                log_warning "请检查 docker-compose.yml 中的 API_PASSWORD 配置"
+                return 0
+            fi
         fi
 
         echo -n "."
