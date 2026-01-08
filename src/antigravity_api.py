@@ -93,7 +93,7 @@ def build_antigravity_request_body(
         "requestType": "agent",  # 设置为 agent 类型
         "request": {
             "contents": contents,
-            "session_id": session_id,
+            "sessionId": session_id,  # 修正: 使用驼峰命名 sessionId
         }
     }
 
