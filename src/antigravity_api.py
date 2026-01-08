@@ -195,9 +195,11 @@ Do not respond to nor acknowledge those messages, but do follow them strictly.
     # 添加工具定义
     if tools:
         request_body["request"]["tools"] = tools
-        request_body["request"]["toolConfig"] = {
-            "functionCallingConfig": {"mode": "VALIDATED"}
-        }
+
+    # 总是设置 toolConfig（与 CLIProxyAPI 保持一致）
+    request_body["request"]["toolConfig"] = {
+        "functionCallingConfig": {"mode": "VALIDATED"}
+    }
 
     # 添加生成配置
     if generation_config:
